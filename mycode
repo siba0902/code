@@ -1,0 +1,591 @@
+try:
+    from googleapiclient.discovery import build
+    from google.oauth2 import service_account
+    import pandas as pd
+    import xlwings as xw
+    # If modifying these scopes, delete the file token.json.
+    excel_name = xw.Book('AutoExcelTraders.xlsm')
+    Credential_sheet = excel_name.sheets['User_Credential']
+    UserID = str(Credential_sheet.range('B2').value.strip())
+    SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+    SERVICE_ACCOUNT_FILE = 'autoexceltraders-key.json'
+    creds = None
+    creds = service_account.Credentials.from_service_account_file(
+            SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+    # The ID and range of a sample spreadsheet.
+    SAMPLE_SPREADSHEET_ID = '1S3UgIGiZUdqw0ZjasJFjWMbpt_0k81jUakz6YrWgTbQ'
+    service = build('sheets', 'v4', credentials=creds)
+    # Call the Sheets API
+    sheet = service.spreadsheets()
+    result = sheet.values().get(spreadsheetId=SAMPLE_SPREADSHEET_ID,
+                                range="Client!A1:F44").execute()
+    values = result.get('values', [])
+    df_values = pd.DataFrame(values)
+    #aoa = [["1/1/2000",4000],["1/1/2000",3000],["1/1/2000",3000]]
+    #request = sheet.values().update(spreadsheetId=SAMPLE_SPREADSHEET_ID,
+                                #range="Data Base!A1", valueInputOption="USER_ENTERED", body={"values":aoa}).execute()
+
+    def search_value_in_first_column(dataframe):
+        search_value = UserID
+        first_column = dataframe.iloc[:, 1]
+        if search_value in first_column.values:
+            index = first_column[first_column == search_value].index[0]
+            fifth_column = dataframe.iloc[:, 5]
+            fourth_column = dataframe.iloc[:, 4]
+            return fifth_column.iloc[index],fourth_column.iloc[index]
+        else:
+            return False
+
+    def main():
+        found = search_value_in_first_column(df_values)
+        print(found)
+        Credential_sheet['B7'].value = found
+    if __name__ == '__main__':
+        main()
+    
+    left_days = Credential_sheet.range('C7').value.strip()
+    #print(left_days)
+    # exit()
+    if(str(left_days) == str(0)):
+        Credential_sheet['B7'].value = f'Unactive'
+
+    if(str(left_days) != str(0)):
+        Credential_sheet['B7'].value = f'Active'
+
+        from kiteext import KiteExt
+        import os, time, json, sys
+        import xlwings as xw
+        import pandas as pd
+        from datetime import datetime
+        from time import sleep
+        import logging
+        import pyotp
+        from kite_trade import *
+        import datetime
+        import datetime
+        import numpy as np
+        import traceback
+  
+
+        excel_name = xw.Book('AutoExcelTraders.xlsm')
+
+        SYMBOLDICT = {}
+        live_data = {}
+        Token_yet_to_subscribe = []
+        Config_sheet = excel_name.sheets['Trade_Terminal']
+        time.sleep(5)
+        TelegramToken=str(Credential_sheet.range('B8').value)
+        ChatId=str(Credential_sheet.range('B9').value)
+            
+        
+
+        def update_status(is_running):
+            current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            try:
+                if is_running:
+                    Config_sheet['AF1'].value = f'Live'
+                    Config_sheet['L1'].value = f'AUTO EXCEL TRADERS'
+                    #Config_sheet['L1'].color = (0, 255, 0)  # Green color
+                    time.sleep(5)
+
+
+                    def Zerodha_login():
+                        global kite
+                        isConnected = 0
+                        try:
+                            kite = KiteExt()
+                            Credential_sheet = excel_name.sheets['User_Credential']
+                            basic=str(Credential_sheet.range('B3').value)
+                            print(basic)
+                            condition = str(Credential_sheet.range('B17').value)
+                            UserID = Credential_sheet.range('B2').value.strip()
+                            #print(UserID)
+                            Password = Credential_sheet.range('B4').value.strip()
+                            #print(Password)
+                            Totp = str(Credential_sheet.range('B5').value)
+                            #print(Totp)
+                            pin = pyotp.TOTP(Totp).now()
+                            twoFA = f"{int(pin):06d}" if len(pin) <=5 else pin 
+                            print(condition)
+                            
+                            # exit()
+                            if basic=="New_Session"  and condition=="I accept the all Terms and Condition" :
+                                print("Login with the Id & Password")
+                                #print(f"UserID={UserID},Password={Password},Totp={Totp},twoFA={twoFA}")
+                                kite.login_with_credentials(userid=UserID, password=Password, twofa=twoFA)
+                                Enctoken = kite.enctoken
+                                print("Enctoken:", Enctoken)
+                                Credential_sheet['B6'].value = None
+                                Credential_sheet['B6'].value = Enctoken
+                                excel_name.save()
+                                time.sleep(2)
+                                Profile = kite.profile()
+                                margin = kite.margins('equity')
+                                client_name = Profile.get('user_name')
+                                print(Profile)
+                                print(client_name)
+                                try:
+                                    requests.get('https://api.telegram.org/bot'+TelegramToken+'/sendMessage?chat_id='+ChatId+'&text="You Sheet Is Live"')
+                                except:
+                                    print("Entered Wrong chatid and token")
+                            
+                            if basic=="Old_Token" and condition=="I accept the all Terms and Condition" :
+                                print("Login with the Enctoken")
+                                Enctoken = Credential_sheet.range('B6').value.strip()
+                                kite.login_using_enctoken(userid=UserID, enctoken=Enctoken,public_token=Enctoken)
+                                # Enctoken = kite.enctoken
+                                # print("Enctoken:", Enctoken)
+                                Profile = kite.profile()
+                                margin = kite.margins('equity')
+                                client_name = Profile.get('user_name')
+                                print(client_name)
+                                print(Profile)
+                                try:
+                                    requests.get('https://api.telegram.org/bot'+TelegramToken+'/sendMessage?chat_id='+ChatId+'&text="You Sheet Is Live"')
+                                except:
+                                    print("Entered Wrong chatid and token")
+                            try:
+                                print("Login  Successfully")
+                                kite.margins()
+                            except:
+                                print("Login Failed!!!!")
+                                try:
+                                    requests.get('https://api.telegram.org/bot'+TelegramToken+'/sendMessage?chat_id='+ChatId+'&text="Please accept the all Terms and Condition"')
+                                except:
+                                    print("Entered Wrong chatid and token")
+                                sys.exit()
+                            Config_sheet.range('L2').value = 'Client Name : '+ client_name
+                            Credential_sheet.range('c2').value = 'Login Successful, Welcome ' + client_name
+                            isConnected = 1
+                            
+                        except Exception as e:
+                            print(f"Error : {e}")
+                            Credential_sheet.range('c2').value = 'Wrong credential'
+
+
+                        return isConnected
+                    
+                    def on_ticks(ws, ticks):
+                        # Callback to receive ticks.
+                        global Token_yet_to_subscribe, live_data
+                        #print("Ticks data: {}".format(ticks))
+                        for stock in ticks:
+                            #print(f"inside tick for loop : {stock}")
+                            try:
+                                volume = stock["volume_traded"]
+                            except:
+                                volume = 0
+                            try:
+                                Vwap = stock["average_traded_price"]
+                            except:
+                                Vwap = 0
+                            try:
+                                bp1 = stock["depth"]["buy"][0]["price"]
+                            except:
+                                bp1 = 0
+                            try:
+                                sp1 = stock["depth"]["sell"][0]["price"]
+                            except:
+                                sp1 = 0        
+                            live_data[stock['instrument_token']] = {"Open": stock["ohlc"]["open"],
+                                                                                        "High": stock["ohlc"]["high"],
+                                                                                        "Low": stock["ohlc"]["low"],
+                                                                                        "Close": stock["ohlc"]["close"],
+                                                                                        "LTP": stock["last_price"],
+                                                                                        "Volume": volume,
+                                                                                        "Vwap": Vwap,
+                                                                                        "change" : stock["change"],
+                                                                                        "bp1":bp1,
+                                                                                        "sp1":sp1}
+                            #print(f"after appending live data became : {live_data}")
+                        if(len(Token_yet_to_subscribe) > 0):
+                            try:
+                                #print(f"New symbol found, so going to subscribe, token= {Token_yet_to_subscribe}")
+                                kws.subscribe(Token_yet_to_subscribe)
+                                kws.set_mode(ws.MODE_FULL, Token_yet_to_subscribe)
+                                Token_yet_to_subscribe = []
+                            except Exception as e:
+                                print(str(e)+":Exception in on_ticks")
+                                
+                    def on_connect(ws, response):
+                        # Callback on successful connect.
+                        #mode available MODE_FULL,MODE_LTP,MODE_QUOTE
+                        TokenList = [64885767] #subscribe Nifty 50
+                        ws.subscribe(TokenList)
+                        ws.set_mode(ws.MODE_FULL, TokenList)
+
+                    def on_error(ws, code, reason):
+                        logging.error('Ticker errored out. code = %d, reason = %s', code, reason)
+
+                    def on_close(ws, code, reason):
+                        # On connection close stop the event loop.
+                        # Reconnection will not happen after executing `ws.stop()`
+                        ws.stop()
+
+                    def on_order_update(ws, data):
+                        logging.info('Ticker: order update %s', data)
+
+                    def stop_ticker():
+                        logging.info('Ticker: stopping..')
+                        kws.close(1000, "Manual close")
+
+                    def on_max_reconnect_attempts(ws):
+                        logging.error('Ticker max auto reconnects attempted and giving up..')
+
+                    def GetToken(exchange,tradingsymbol):
+                        global ins_df
+                        
+                        Token = ins_df[(ins_df.tradingsymbol == tradingsymbol) & (ins_df.exchange == exchange)].iloc[0]['instrument_token']
+                        
+                        return Token
+                                
+                    def order_status (orderid):
+                        print(f"I am at order_status function with order id {orderid}")
+                        filled_quantity = 0
+                        AverageExecutedPrice = 0
+                        global kite
+                        try:
+                            order_history = kite.order_history(orderid)
+                            filled_quantity = order_history[-1].get('filled_quantity')
+                            AverageExecutedPrice = order_history[-1].get('average_price')
+                            msg = (f" {filled_quantity} : {AverageExecutedPrice} ")
+                            try:
+                                requests.get('https://api.telegram.org/bot'+TelegramToken+'/sendMessage?chat_id='+ChatId+'&text="{}"'.format(msg))
+                            except:
+                                print("Entered Wrong chatid and token")
+
+                        except Exception as e:
+                            Message = str(e) + " : Exception occur in order_status"
+                            print(Message)
+                        return filled_quantity, AverageExecutedPrice
+                        
+                    def place_trade(tradingsymbol_exchange,quantity,transaction_type ):
+                        
+                        print(f"place_trade called with parameter {tradingsymbol_exchange} {quantity} {transaction_type}")
+                        msg = (f"{tradingsymbol_exchange} {quantity} {transaction_type}")
+                        try:
+                            requests.get('https://api.telegram.org/bot'+TelegramToken+'/sendMessage?chat_id='+ChatId+'&text="{}"'.format(msg))
+                        except:
+                            print("Entered Wrong chatid and token")
+
+                        global kite
+                        
+                        try:
+                            exchange = tradingsymbol_exchange[:3]
+                            tradingsymbol = tradingsymbol_exchange[4:]
+                                
+                            if(exchange in ['NSE','BSE']):
+                                product = kite.PRODUCT_CNC
+                            else:
+                                product = kite.PRODUCT_MIS
+                                    
+                            variety =  kite.VARIETY_REGULAR
+                            order_type = 'MARKET'
+                            
+                            price = 0
+                            
+                            AverageExecutedPrice =0
+                            
+                            order_id = kite.place_order(tradingsymbol = tradingsymbol,
+                                                    exchange = exchange,
+                                                    transaction_type = transaction_type,
+                                                    quantity = int(quantity),
+                                                    price = price,
+                                                    variety = variety,
+                                                    order_type = order_type,
+                                                    product = product)
+                            print(f"Order id = {order_id}")
+                            filled_quantity, AverageExecutedPrice = order_status (order_id)
+                        
+                        except Exception as e:
+                            Message = str(e) + " : Exception occur in order_place. "
+                            print(Message)
+                        return AverageExecutedPrice
+                    
+                    def start_excel():
+                        global live_data , kws
+                        global SYMBOLDICT
+                        global Token_yet_to_subscribe
+                        tt = excel_name.sheets("Trade_Terminal")
+                        ob = excel_name.sheets("OrderBook")
+                        op = excel_name.sheets("OpenPosition")
+                        tm = excel_name.sheets("Margin")
+                        th = excel_name.sheets("Holdings")
+                        ob.range("a:az").value = op.range("a3:o3").value = tt.range("p:q").value =tt.range("t:t").value = None
+                        tt.range(f"a3:z3").value = [ "Symbol", "Open", "High", "Low", "Close", "VWAP", "Best Buy Price",
+                                                    "Best Sell Price","Volume", "LTP","Percentage change", "Qty", "BUY/SELL", "Entry Signal", "Exit Signal", "Entry Price",
+                                                    "Exit Price", "Target","SL" ,"Trade Status","PnL"]
+                        tt.range(f"a1:t1").value = [ "Opening_Balance", "Live_Balance", "", "Commodity_Balance", "Exposure ", "", "", "", "","",
+                                                    "","AUTO EXCEL TRADERS", "", "", "", "", "","Order_Type","Trade","Overall_PnL"
+                                                    ]           
+
+                        subs_lst = []
+                        Symbol_Token = {}
+
+                        while True:
+                            try:
+                                time.sleep(.5)
+                                
+                                # print(live_data)
+                                symbols = tt.range(f"a{4}:a{1000}").value
+                                trading_info = tt.range(f"l{4}:t{1000}").value
+                                main_list = []
+                                
+                                idx = 0
+                                
+                                # Token_values = []
+                                for i in symbols:
+                                    lst = [None, None, None, None,None, None, None, None, None,None]
+                                    if i:
+                                        if i not in subs_lst:
+                                            subs_lst.append(i)
+                                            try:
+                                                exchange = i[:3]
+                                                tradingsymbol = i[4:]
+                                                Token = GetToken(exchange,tradingsymbol)
+                                                Symbol_Token[i] =  int(Token)
+                                                Token_yet_to_subscribe.append(int(Token))
+                                                tt.range(f"dm{idx + 4}").value = Token
+                                                print(f"Symbol = {i}, Token={Token} subscribed")
+                                                
+                                            except Exception as e:
+                                                print(f"Subscribe error {i} : {e}")
+
+                                        if i in subs_lst:
+                                            try:
+                                                TokenKey = Symbol_Token[i]
+
+                                                lst = [live_data[TokenKey].get("Open", "-"),
+                                                    live_data[TokenKey].get("High", "-"),
+                                                    live_data[TokenKey].get("Low", "-"),
+                                                    live_data[TokenKey].get("Close", "-"),
+                                                    live_data[TokenKey].get("Vwap", "-"),
+                                                    live_data[TokenKey].get("bp1", "-"),
+                                                    live_data[TokenKey].get("sp1", "-"),
+                                                    live_data[TokenKey].get("Volume", "-"),
+                                                    live_data[TokenKey].get("LTP", "-"),
+                                                    live_data[TokenKey].get("change", "-")]
+                                                trade_info = trading_info[idx]
+                                                #print(trade_info)
+                                                if trade_info[0] is not None and trade_info[1] is not None:
+                                                    if type(trade_info[0]) is float and type(trade_info[1]) is str:
+                                                        if trade_info[1].upper() == "BUY" and trade_info[2] is True:
+                                                            
+                                                            #0:Qty    1:Direction    2:Entry_Signal    3:Exit Signal 4:Entry_Price    5:Exit_Price    6:Target    7:SL    8:Trade_status
+
+                                                            if trade_info[2] is True and trade_info[3] is not True and trade_info[4] is None and trade_info[5] is None and trade_info[8] is None:
+                                                        
+                                                                tt.range(f"p{idx + 4}").value = place_trade(i, int(trade_info[0]), "BUY")
+                                                                tt.range(f"t{idx + 4}").value = 'Active'
+                                                            
+                                                            elif trade_info[2] is True and  trade_info[4] is not None and trade_info[5] is None and trade_info[8] == 'Active':
+                                                                LTP = live_data[TokenKey].get("LTP", 0)
+                                                                if trade_info[3] is True:
+                                                                    tt.range(f"q{idx + 4}").value = place_trade(i, int(trade_info[0]), "SELL")
+                                                                    tt.range(f"t{idx + 4}").value = 'Closed'
+                                                                    time.sleep(0.5)
+                                                                    tt.range(f"t{idx + 4}").value =tt.range(f"p{idx + 4}").value =tt.range(f"q{idx + 4}").value = None
+                                                                
+                                                                elif type(trade_info[6]) is float and trade_info[6] <= LTP and LTP != 0 and trade_info[8] == 'Active':
+                                                                    tt.range(f"q{idx + 4}").value = place_trade(i, int(trade_info[0]), "SELL")
+                                                                    tt.range(f"t{idx + 4}").value = 'Closed'
+                                                                    time.sleep(0.5)
+                                                                    tt.range(f"t{idx + 4}").value =tt.range(f"p{idx + 4}").value =tt.range(f"q{idx + 4}").value = None
+                                                                
+                                                                elif type(trade_info[7]) is float and trade_info[7] >= LTP and LTP != 0:
+                                                                    tt.range(f"q{idx + 4}").value = place_trade(i, int(trade_info[0]), "SELL")
+                                                                    tt.range(f"t{idx + 4}").value = 'Closed'
+                                                                    time.sleep(0.5)
+                                                                    tt.range(f"t{idx + 4}").value =tt.range(f"p{idx + 4}").value =tt.range(f"q{idx + 4}").value = None
+                                                                    
+                                                        if trade_info[1].upper() == "SELL" and trade_info[2] is True:
+                                                        
+                                                        #0:Qty    1:Direction    2:Entry_Signal    3:Exit Signal 4:Entry_Price    5:Exit_Price    6:Target    7:SL    8:Trade_status
+
+                                                            if trade_info[2] is True and trade_info[3] is not True and trade_info[4] is None and trade_info[5] is None and trade_info[8] is None:
+                                                                tt.range(f"p{idx + 4}").value = place_trade(i, int(trade_info[0]), "SELL")
+                                                                tt.range(f"t{idx + 4}").value = 'Active'
+                                                            
+                                                            elif trade_info[2] is True and  trade_info[4] is not None and trade_info[5] is None and trade_info[8] == 'Active':
+                                                                LTP = live_data[TokenKey].get("LTP", 0)
+                                                                
+                                                                if trade_info[3] is True:
+                                                                
+                                                                    tt.range(f"q{idx + 4}").value = place_trade(i, int(trade_info[0]), "BUY")
+                                                                    tt.range(f"t{idx + 4}").value = "Closed"
+                                                                    time.sleep(0.5)
+                                                                    tt.range(f"t{idx + 4}").value =tt.range(f"p{idx + 4}").value =tt.range(f"q{idx + 4}").value = None
+                                                                    
+                                                                elif type(trade_info[6]) is float and trade_info[6] >= LTP and LTP != 0 and trade_info[8] == 'Active':
+                                                                    tt.range(f"q{idx + 4}").value = place_trade(i, int(trade_info[0]), "BUY")
+                                                                    tt.range(f"t{idx + 4}").value = 'Closed'
+                                                                    time.sleep(0.5)
+                                                                    tt.range(f"t{idx + 4}").value =tt.range(f"p{idx + 4}").value =tt.range(f"q{idx + 4}").value = None
+                                                                
+                                                                elif type(trade_info[7]) is float and trade_info[7] <= LTP and LTP != 0:
+                                                                    tt.range(f"q{idx + 4}").value = place_trade(i, int(trade_info[0]), "BUY")
+                                                                    tt.range(f"t{idx + 4}").value = 'Closed'
+                                                                    time.sleep(0.5)
+                                                                    tt.range(f"t{idx + 4}").value =tt.range(f"p{idx + 4}").value =tt.range(f"q{idx + 4}").value = None
+                                                        if trade_info[1].upper() == "SELL" and trade_info[2] == "Traded"  :
+                                                            if trade_info[2] == "Traded" and trade_info[3] is not True :
+                                                                #tt.range(f"p{idx + 4}").value = place_trade(i, int(trade_info[0]), "SELL")
+                                                                tt.range(f"t{idx + 4}").value = 'Active'
+                                                            elif trade_info[2] == "Traded" and  trade_info[8] == 'Active':
+                                                                LTP = live_data[TokenKey].get("LTP", 0)
+                                                                if trade_info[3] is True:
+                                                                    tt.range(f"q{idx + 4}").value = place_trade(i, int(trade_info[0]), "SELL")
+                                                                    tt.range(f"t{idx + 4}").value = 'Closed'
+                                                                    time.sleep(0.5)
+                                                                    tt.range(f"t{idx + 4}").value =tt.range(f"p{idx + 4}").value =tt.range(f"q{idx + 4}").value = None
+                                            
+                                            
+                                            except Exception as e:
+                                                #print('Exception occur in trade terminal:' + str(e))
+                                                pass
+                                    main_list.append(lst)
+                                    
+                                    idx += 1 
+                                
+                                tt.range("b4:k1000").value = main_list
+                                if excel_name.sheets.active.name == "OrderBook":
+                                    #ob.range("a:az").value = None
+                                    ob.range("a1").value = get_order_book()
+                                elif excel_name.sheets.active.name == "OpenPosition":
+                                    #op.range("a:az").value = None
+                                    op.range("a3").value = get_position()
+                                elif excel_name.sheets.active.name == "Margin":
+                                    #tm.range("a:az").value = None
+                                    tm.range("a1").value = get_margins()
+                                # elif excel_name.sheets.active.name == "Holdings":
+                                    # th.range("a:az").value = None
+                                    # th.range("a1").value = get_holdings()
+                                    time.sleep(5.5)
+                                
+                            except Exception as e:
+                                print('Exception occur in while :' + str(e))
+                                #traceback.print_exc()
+                                break
+
+                    def get_position():
+                        #print(f"I am inside get_position")
+                        global kite
+                        position = kite.positions()
+                        df_position_net = pd.DataFrame(position['net'])
+                        return df_position_net
+                    def get_margins():
+                        #print(f"I am inside get_position")
+                        global kite
+                        tt = excel_name.sheets("Trade_Terminal")
+                        positions = kite.positions()['net']# Calculate total P&L
+                                                              
+                        total_pnl = sum(position['pnl'] for position in positions)
+                        tt.range("t2").value = total_pnl
+                        margins = kite.margins()
+                        df_margins_net = pd.DataFrame(margins['equity'])
+                        return df_margins_net    
+                    def get_order_book():
+                        #print(f"I am inside get_order_book")
+                        global kite
+                        order_book = pd.DataFrame()
+                        order_book = kite.orders()
+                        if(len(order_book) > 0):
+                            order_book = pd.DataFrame(order_book)
+                            order_book = order_book.drop(['meta'], axis=1)
+                        return order_book
+                    
+                    def get_holdings():
+                        holdings = kite.holdings()
+                        df_holdings = pd.DataFrame(holdings)
+
+
+                        # df_holdings.to_excel('AutoExcelTraders.xlsm', sheet_name='Holdings', index=False)
+                        # df_holdings.to_excel("mss.xlsx")
+                        return df_holdings
+                        
+                    def Zerodha_Token():
+                        global kite, ins_df
+                        print("Zerodha intrument token download started, may take upto 2-3 minutes ..")
+                        instruments = kite.instruments()
+                        ins_df = pd.DataFrame(instruments, index=None)
+                        # print(ins_df)
+                        Config_sheet1 = excel_name.sheets['Config']
+                        INS_D=str(Config_sheet1.range('B8').value)
+                        if INS_D=="True":
+
+                            if not os.path.exists("Instrument.xlsm"):
+                                try:
+                                    wb = xw.Book()
+                                    wb.save("Instrument.xlsm")
+                                    wb.close()  
+
+                                        
+                                except Exception as e:
+                                    print(f"Error Creating Excel File : {e}")
+                                    sys.exit()
+                            wb = xw.Book("Instrument.xlsm")
+                            # wb.close()
+                            
+                            try:
+                                wb.sheets('Instrument')
+                            except:
+                                wb.sheets.add('Instrument')
+                                ins = wb.sheets('Instrument')  
+
+                            excel_name1=xw.Book('Instrument.xlsm')
+
+                            ins = excel_name1.sheets("Instrument")
+                            ins.range("a1:am100000").value = None
+                            
+                            ins.range("a1").value = ins_df
+                            time.sleep(2)
+                            print("Zerodha intrument token download completed")
+                            excel_name1.save()
+                            excel_name1.close()
+                        
+                    if __name__ == '__main__':
+                        if(Zerodha_login() == 1 ):   
+                            try:
+                                Zerodha_Token()
+                                kws = kite.kws()
+                                holdings_data = get_holdings()
+                                # print(holdings_data)
+                                
+                                # Assign the callbacks.
+                                kws.on_ticks = on_ticks
+                                kws.on_order_update = on_order_update
+                                kws.on_connect = on_connect
+                                #kws.on_close = on_close
+                                kws.connect(threaded=True)
+                                start_excel()
+                            except Exception as e:
+                                print("Exception : " + str(e))
+                        else:
+                            print("Credential is not correct")
+                            try:
+                                requests.get('https://api.telegram.org/bot'+TelegramToken+'/sendMessage?chat_id='+ChatId+'&text="Credential is not correct"')
+                            except:
+                                print("Entered Wrong chatid and token")
+            except:
+                Config_sheet['AF1'].value = f'{current_time}: Stopped'
+                Config_sheet['L1'].value = f'ZERODHA STOPPED'
+                #Config_sheet['L1'].color = (255, 0, 0)  # Red color
+                try:
+                    requests.get('https://api.telegram.org/bot'+TelegramToken+'/sendMessage?chat_id='+ChatId+'&text="You Sheet Is Close"')
+                except:
+                    print("Entered Wrong chatid and token")
+                    
+                time.sleep(10)
+                excel_name.save()
+                # excel_name.close()
+                #sys.exit()
+
+        is_running = True  
+        update_status(is_running)
+        is_running = False  
+        update_status(is_running)
+
+except KeyboardInterrupt:
+    # Keyboard interruption occurred
+    # Terminate the subprocesses before exiting
+    print("Keyboard interruption detected. Terminating subprocesses...")
